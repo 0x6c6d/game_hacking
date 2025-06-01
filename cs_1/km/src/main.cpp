@@ -46,10 +46,80 @@ namespace driver {
 		SIZE_T size;
 		SIZE_T return_size;
 	};
+
+	NTSTATUS create(PDEVICE_OBJECT device_object, PIRP irp) {
+		UNREFERENCED_PARAMETER(device_object);
+
+		IoCompleteRequest(irp, IO_NO_INCREMENT);
+
+		return irp->IoStatus.Status;
+	}
+
+	NTSTATUS close(PDEVICE_OBJECT device_object, PIRP irp) {
+		UNREFERENCED_PARAMETER(device_object);
+
+		IoCompleteRequest(irp, IO_NO_INCREMENT);
+
+		return irp->IoStatus.Status;
+	}
+
+	// when sending data from um to km via DeviceIoControl it goes through this function
+	//		irp holds data that will be send from um
+	NTSTATUS device_control(PDEVICE_OBJECT device_object, PIRP irp) {
+		UNREFERENCED_PARAMETER(device_object);
+
+		debug_print("[+] device control called\n");
+
+		NTSTATUS status = STATUS_UNSUCCESSFUL;
+
+		// needed to determine which code was passed through
+		PIO_STACK_LOCATION stack_irp = IoGetCurrentIrpStackLocation(irp);
+
+		// access the request object sent from um
+		auto request = reinterpret_cast<Request*>(irp->AssociatedIrp.SystemBuffer);
+
+		if (stack_irp == nullptr || request == nullptr) {
+			IoCompleteRequest(irp, IO_NO_INCREMENT);
+			return status;
+		}
+
+		// target process we want to access
+		//		static means the value persists beyond the lifetime of the function
+		static PEPROCESS target_process = nullptr;
+
+		const ULONG control_code = stack_irp->Parameters.DeviceIoControl.IoControlCode;
+		switch (control_code) {
+			// populate target_process with a process (get a handle to the process)
+			case codes::attach:
+				status = PsLookupProcessByProcessId(request->process_id, &target_process);
+				break;
+			case codes::read:
+				if (target_process != nullptr) {
+					status = MmCopyVirtualMemory(target_process, request->target, PsGetCurrentProcess(), 
+						request->buffer, request->size, KernelMode, &request->return_size);
+				}
+				break;
+			case codes::write:
+				if (target_process != nullptr) {
+					status = MmCopyVirtualMemory(PsGetCurrentProcess(), request->buffer, target_process, 
+						request->target, request->size, KernelMode, &request->return_size);
+				}
+				break;
+			default:
+				break;
+		}
+
+		irp->IoStatus.Status = status;
+		irp->IoStatus.Information = sizeof(Request);
+
+		IoCompleteRequest(irp, IO_NO_INCREMENT);
+
+		return status;
+	}
 } // namespace driver
 
 
-// "teal" entry point
+// "real" entry point
 NTSTATUS driver_main(PDRIVER_OBJECT driver_object, PUNICODE_STRING registry_path) {
 	UNREFERENCED_PARAMETER(registry_path);
 
@@ -62,11 +132,37 @@ NTSTATUS driver_main(PDRIVER_OBJECT driver_object, PUNICODE_STRING registry_path
 		FILE_DEVICE_SECURE_OPEN, FALSE, &device_object);
 
 	if (status != STATUS_SUCCESS) {
-		debug_print("[-] failed to create driver device.\n");
+		debug_print("[-] failed to create driver device\n");
 		return status;
 	}
 
 	debug_print("[+] driver device successfully created\n");
+
+	UNICODE_STRING symbolic_link = { };
+	RtlInitUnicodeString(&symbolic_link, L"\\DosDevices\\CS_1");
+
+	status = IoCreateSymbolicLink(&symbolic_link, &device_name);
+	if (status != STATUS_SUCCESS) {
+		debug_print("[-] failed to eastablish symbolic link\n");
+		return status;
+	}
+
+	debug_print("[+] driver symbolic link successfully established\n");
+
+	// allows to send small amounts of data between um/km
+	SetFlag(device_object->Flags, DO_BUFFERED_IO);
+
+	// set the driver handlers to custom functions
+	//		inside the driver object is an array of functions (MajorFunction)
+	//		when events happen the function that are saved in the MajorFunction array are called
+	driver_object->MajorFunction[IRP_MJ_CREATE] = driver::create;
+	driver_object->MajorFunction[IRP_MJ_CLOSE] = driver::close;
+	driver_object->MajorFunction[IRP_MJ_DEVICE_CONTROL] = driver::device_control;
+
+	// initialize the device
+	ClearFlag(device_object->Flags, DO_DEVICE_INITIALIZING);
+
+	debug_print("[+] driver initialized successfully\n");
 
 	return STATUS_SUCCESS;
 }
