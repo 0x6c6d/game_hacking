@@ -124,7 +124,7 @@ NTSTATUS driver_main(PDRIVER_OBJECT driver_object, PUNICODE_STRING registry_path
 	UNREFERENCED_PARAMETER(registry_path);
 
 	UNICODE_STRING device_name = {};
-	RtlInitUnicodeString(&device_name, L" \\Device\\CS_1");
+	RtlInitUnicodeString(&device_name, L" \\Device\\DRIVER_1");
 
 	// create driver device object
 	PDEVICE_OBJECT device_object = nullptr;
@@ -139,7 +139,7 @@ NTSTATUS driver_main(PDRIVER_OBJECT driver_object, PUNICODE_STRING registry_path
 	debug_print("[+] driver device successfully created\n");
 
 	UNICODE_STRING symbolic_link = { };
-	RtlInitUnicodeString(&symbolic_link, L"\\DosDevices\\CS_1");
+	RtlInitUnicodeString(&symbolic_link, L"\\DosDevices\\DRIVER_1");
 
 	status = IoCreateSymbolicLink(&symbolic_link, &device_name);
 	if (status != STATUS_SUCCESS) {
@@ -182,7 +182,7 @@ NTSTATUS DriverEntry() {
 	debug_print("[+] DriverEntry triggered\n");
 
 	UNICODE_STRING driver_name = {};
-	RtlInitUnicodeString(&driver_name, L"\\Driver\\CS_1"); // places the string (L"...") in the unicode_string structure
+	RtlInitUnicodeString(&driver_name, L"\\Driver\\DRIVER_1"); // places the string (L"...") in the unicode_string structure
 
 	return IoCreateDriver(&driver_name, &driver_main);
 }

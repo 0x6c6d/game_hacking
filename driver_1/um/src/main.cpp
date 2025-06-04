@@ -137,7 +137,7 @@ int main() {
 	}
 
 	// create a handle to the driver
-	const HANDLE driver = CreateFile(L"\\\\.\\CS_1", GENERIC_READ, 0, 
+	const HANDLE driver = CreateFile(L"\\\\.\\DRIVER_1", GENERIC_READ, 0, 
 		nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
 	if (driver == INVALID_HANDLE_VALUE) {
 		std::cout << "Failed to create driver handle\n";
