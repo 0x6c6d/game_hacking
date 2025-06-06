@@ -1,3 +1,6 @@
+// usages (after installing driver)
+// > um <threadid> <priority>
+
 #include <windows.h> 
 #include <stdio.h> 
 #include "..\..\km\src\Common.h"
@@ -9,7 +12,7 @@ int Error(const char* message) {
 
 int main(int argc, const char* argv[]) {
 	if (argc < 3) {
-		printf("Usage: ThreadPriority <threadid> <priority>\n");
+		printf("Usage: um <threadid> <priority>\n");
 	}
 
 	int tid = atoi(argv[1]);
@@ -17,7 +20,7 @@ int main(int argc, const char* argv[]) {
 
 	// open handle to driver
 	//		should reach the driver in its IRP_MJ_CREATE dispatch routine
-	HANDLE hDevice = CreateFile(L"\\\\.\\ThreadPriority", GENERIC_WRITE, 0, nullptr, OPEN_EXISTING, 0, nullptr);
+	HANDLE hDevice = CreateFile(L"\\\\.\\tp", GENERIC_WRITE, 0, nullptr, OPEN_EXISTING, 0, nullptr);
 	if (hDevice == INVALID_HANDLE_VALUE) 
 			return Error("Failed to open device");
 

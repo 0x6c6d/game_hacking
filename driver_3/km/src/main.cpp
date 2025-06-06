@@ -1,4 +1,9 @@
-#include <ntifs.h>
+// installation & execution
+// > sc create tp type= kernel binPath= C:\Test\km.sys
+// > sc start tp
+// check with WinObj > GLOBAL?? > tp
+
+#include <ntifs.h> // already includes <ntddk.h>
 #include "Common.h"
 
 // prototypes
@@ -9,15 +14,17 @@ NTSTATUS CustomWrite(PDEVICE_OBJECT device_obj, PIRP irp);
 // entry
 extern "C" NTSTATUS
 DriverEntry(PDRIVER_OBJECT driver_obj, PUNICODE_STRING reg_path) {
-	driver_obj->DriverUnload = CustomUnload;
+	UNREFERENCED_PARAMETER(reg_path);
 
+	// register custom unload function
+	driver_obj->DriverUnload = CustomUnload;
 	// add dispatch routines
 	driver_obj->MajorFunction[IRP_MJ_CREATE] = CustomCreateClose;
 	driver_obj->MajorFunction[IRP_MJ_CLOSE] = CustomCreateClose;
 	driver_obj->MajorFunction[IRP_MJ_WRITE] = CustomWrite;
 
 	// create device object
-	UNICODE_STRING device_name = RTL_CONSTANT_STRING(L"\\Device\\ThreadPriority");
+	UNICODE_STRING device_name = RTL_CONSTANT_STRING(L"\\Device\\tp");
 	PDEVICE_OBJECT device_obj;
 	NTSTATUS status = IoCreateDevice(driver_obj, 0, &device_name, FILE_DEVICE_UNKNOWN, 0, FALSE, &device_obj);
 	if (!NT_SUCCESS(status)) {
@@ -26,7 +33,7 @@ DriverEntry(PDRIVER_OBJECT driver_obj, PUNICODE_STRING reg_path) {
 	}
 
 	// make it accessible for um via symbolic link
-	UNICODE_STRING sym_link = RTL_CONSTANT_STRING(L"\\??\\ThreadPriority");
+	UNICODE_STRING sym_link = RTL_CONSTANT_STRING(L"\\??\\tp");
 	status = IoCreateSymbolicLink(&sym_link, &device_name);
 	if (!NT_SUCCESS(status)) {
 		KdPrint(("Failed to create symbolic link (0x%08X)\n", status));
@@ -39,8 +46,9 @@ DriverEntry(PDRIVER_OBJECT driver_obj, PUNICODE_STRING reg_path) {
 
 void CustomUnload(_In_ PDRIVER_OBJECT driver_obj) {
 	// unload device object and symblic link in reverse order
+	KdPrint(("ThreadPriority: unload driver\n"));
 
-	UNICODE_STRING sym_link = RTL_CONSTANT_STRING(L"\\??\\ThreadPriority"); 
+	UNICODE_STRING sym_link = RTL_CONSTANT_STRING(L"\\??\\tp"); 
 	// delete symbolic link 
 	IoDeleteSymbolicLink(&sym_link); 
 	
@@ -62,6 +70,8 @@ NTSTATUS CustomCreateClose(PDEVICE_OBJECT device_obj, PIRP irp) {
 
 // using "WriteFile" for um/km communication (DeviceIoControl & ReadFile are other communication options)
 NTSTATUS CustomWrite(PDEVICE_OBJECT device_obj, PIRP irp) {
+	UNREFERENCED_PARAMETER(device_obj);
+
 	auto status = STATUS_SUCCESS;
 	ULONG_PTR information = 0; // track used bytes
 
@@ -80,9 +90,29 @@ NTSTATUS CustomWrite(PDEVICE_OBJECT device_obj, PIRP irp) {
 		}
 		
 		// get a handle to our thread to call KeSetPriorityThread()
+		// the thread cannot die after optaining its pointer because the lookup function increments 
+		// the reference count on the kernel thread object (cannot die until we explicitly
+		// decrement the reference count)
 		PETHREAD thread; 
 		status = PsLookupThreadByThreadId(ULongToHandle(data->ThreadId), &thread); 
 		if (!NT_SUCCESS(status)) 
 			break;
+
+		// set the thread priority
+		auto old_prio = KeSetPriorityThread(thread, data->Priority); 
+		KdPrint(("Priority change for thread %u from %d to %d succeeded!\n", 
+			data->ThreadId, old_prio, data->Priority));	
+		UNREFERENCED_PARAMETER(old_prio);
+
+		// decrement the kernel thread objects reference count so it can be terminated
+		ObDereferenceObject(thread);
+
+		// report to the client that we used the provided buffer
+		information = sizeof(data);
 	} while (false);
+
+	irp->IoStatus.Status = status;
+	irp->IoStatus.Information = information;
+	IoCompleteRequest(irp, IO_NO_INCREMENT);
+	return status;
 }
