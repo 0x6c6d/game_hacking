@@ -20,4 +20,17 @@ int main(int argc, const char* argv[]) {
 	HANDLE hDevice = CreateFile(L"\\\\.\\ThreadPriority", GENERIC_WRITE, 0, nullptr, OPEN_EXISTING, 0, nullptr);
 	if (hDevice == INVALID_HANDLE_VALUE) 
 			return Error("Failed to open device");
+
+	ThreadData data;
+	data.ThreadId = tid;
+	data.Priority = priority;
+
+	DWORD returned; 
+	// invokes the IRP_MJ_WRITE major function routine
+	BOOL success = WriteFile(hDevice, &data, sizeof(data), &returned, nullptr); 
+	if (!success) 
+		return Error("Priority change failed!"); 
+	
+	printf("Priority change succeeded!\n"); 
+	CloseHandle(hDevice);
 }

@@ -1,8 +1,8 @@
-#include <ntddk.h>
+#include <ntifs.h>
 #include "Common.h"
 
 // prototypes
-void CustomUnload(PDRIVER_OBJECT driver_obj);
+void CustomUnload(_In_ PDRIVER_OBJECT driver_obj);
 NTSTATUS CustomCreateClose(PDEVICE_OBJECT device_obj, PIRP irp);
 NTSTATUS CustomWrite(PDEVICE_OBJECT device_obj, PIRP irp);
 
@@ -51,9 +51,38 @@ void CustomUnload(_In_ PDRIVER_OBJECT driver_obj) {
 // pirp = pointer to I/O request packet
 //		primary object where request information are stored
 NTSTATUS CustomCreateClose(PDEVICE_OBJECT device_obj, PIRP irp) {
+	UNREFERENCED_PARAMETER(device_obj);
+
+	irp->IoStatus.Status = STATUS_SUCCESS;
+	irp->IoStatus.Information = 0;
+	// propagates the irp back to its creator (e.g. I/O manager)
+	IoCompleteRequest(irp, IO_NO_INCREMENT);
+	return STATUS_SUCCESS;
 }
 
 // using "WriteFile" for um/km communication (DeviceIoControl & ReadFile are other communication options)
 NTSTATUS CustomWrite(PDEVICE_OBJECT device_obj, PIRP irp) {
-	
+	auto status = STATUS_SUCCESS;
+	ULONG_PTR information = 0; // track used bytes
+
+	auto irp_sp = IoGetCurrentIrpStackLocation(irp);
+	do { // allows do/while(false) loop to use the break keyword
+		if (irp_sp->Parameters.Write.Length < sizeof(ThreadData)) {
+			status = STATUS_BUFFER_TOO_SMALL;
+			break;
+		}
+
+		auto data = static_cast<ThreadData*>(irp->UserBuffer);
+		// short circuit evaluation: check for nullptr first & skip other checks if nullptr
+		if (data == nullptr || data->Priority < 1 || data->Priority > 31) {
+			status = STATUS_INVALID_PARAMETER;
+			break;
+		}
+		
+		// get a handle to our thread to call KeSetPriorityThread()
+		PETHREAD thread; 
+		status = PsLookupThreadByThreadId(ULongToHandle(data->ThreadId), &thread); 
+		if (!NT_SUCCESS(status)) 
+			break;
+	} while (false);
 }
