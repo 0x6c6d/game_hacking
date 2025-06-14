@@ -1,5 +1,18 @@
 #include "memory.h"
 
+typedef struct _NULL_MEMORY {
+	void* buffer_address;
+	UINT_PTR address;
+	ULONGLONG size;
+	ULONG pid;
+	BOOLEAN write;
+	BOOLEAN read;
+	BOOLEAN req_base;
+	void* output;
+	const char* module_name;
+	ULONG64 base_address;
+} NULL_MEMORY;
+
 PVOID get_system_module_base(const char* module_name) {
 	ULONG bytes = 0;
 	NTSTATUS status = ZwQuerySystemInformation(SystemModuleInformation, NULL, bytes, &bytes);
