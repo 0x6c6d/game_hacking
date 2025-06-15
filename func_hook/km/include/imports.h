@@ -92,7 +92,7 @@ typedef struct _COPY_MEMORY {
 	bool		write;
 	const char* module_name;
 	const char* process_name;
-}COPY_MEMORY;
+} COPY_MEMORY;
 
 extern "C" NTSTATUS ZwQuerySystemInformation(ULONG InfoClass, PVOID Buffer, ULONG Length, PULONG ReturnLength);
 

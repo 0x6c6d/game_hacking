@@ -41,7 +41,58 @@ namespace driver
 		COPY_MEMORY m{};
 		m.get_pid = true;
 		m.process_name = process_name;
+		
 		call_hook(&m);
 		return m.pid;
+	}
+
+	static uintptr_t get_module_base(HANDLE pid, const char* mod_name)
+	{
+		COPY_MEMORY m{};
+		m.base = true;
+		m.pid = pid;
+		m.module_name = mod_name;
+		
+		call_hook(&m);
+		return (uintptr_t)m.buffer;
+	}
+
+	static uintptr_t get_peb_address(HANDLE pid)
+	{
+		COPY_MEMORY m{};
+		m.peb = true;
+		m.pid = pid;
+
+		call_hook(&m);
+		return (uintptr_t)m.buffer;
+	}
+
+	template<typename type>
+	type rpm(uintptr_t read_addr)
+	{
+		type buffer{};
+
+		COPY_MEMORY m{};
+		m.read = true;
+		m.pid = globals::process_id;
+		m.address = read_addr;
+		m.buffer = &buffer;
+		m.size = sizeof(type);
+		
+		call_hook(&m);
+		return buffer;
+	}
+
+	template<typename type>
+	void wpm(UINT_PTR write_addr, type value)
+	{
+		COPY_MEMORY m{};
+		m.write = true;
+		m.pid = globals::process_id;
+		m.address = write_addr;
+		m.buffer = &value;
+		m.size = sizeof(value);
+
+		call_hook(&m);
 	}
 }
