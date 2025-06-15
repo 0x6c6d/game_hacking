@@ -22,6 +22,7 @@ typedef struct _NULL_MEMORY {
 // global variables are bad
 uintptr_t base_address = 0;
 std::uint32_t process_id = 0;
+static std::once_flag flag;
 
 #pragma region Memory Management
 // https://www.unknowncheats.me/forum/programming-for-beginners/333553-creating-performant-basic-external-cheat-using-modern-concepts.html
@@ -45,9 +46,11 @@ using unique_handle = std::unique_ptr<HANDLE, HandleDisposer>;
 
 template<typename ... Arg>
 uint64_t call_hook(const Arg ... args) {
-	void* hooked_func = GetProcAddress(LoadLibrary("win32u.dll"), "NtOpenCompositionSurfaceSectionInfo");
+	std::call_once(flag, [] { LoadLibraryW(L"user32.dll"); });
+	void* hooked_func = GetProcAddress(LoadLibraryW(L"win32u.dll"), "NtOpenCompositionSurfaceSectionInfo");
 
-	auto func = static_cast<uint64_t(_stdcall*)(Arg...)>(hooked_func);
+	printf("func addr: %p\n", hooked_func);
+	const auto func = static_cast<uint64_t(_stdcall*)(Arg...)>(hooked_func);
 
 	return func(args...);
 }
@@ -80,4 +83,52 @@ static ULONG64 get_module_base_address(const char* module_name) {
 	ULONG64 base = NULL;
 	base = instructions.base_address;
 	return base;
+}
+
+template <class T>
+T Read(UINT_PTR read_address) {
+	T response{};
+	NULL_MEMORY instructions;
+	instructions.pid = process_id;
+	instructions.size = sizeof(T);
+	instructions.address = read_address;
+	instructions.read = TRUE;
+	instructions.write = FALSE;
+	instructions.req_base = FALSE;
+	instructions.output = &response;
+	call_hook(&instructions);
+
+	return response;
+}
+
+bool write_memory(UINT_PTR write_address, UINT_PTR source_address, SIZE_T write_size) {
+	NULL_MEMORY instructions;
+	instructions.pid = process_id;
+	instructions.size = write_size;
+	instructions.address = write_address;
+	instructions.read = FALSE;
+	instructions.write = TRUE;
+	instructions.req_base = FALSE;
+	instructions.buffer_address = (void*)source_address;
+	call_hook(&instructions);
+
+	return true;
+}
+
+template<typename S>
+bool write(UINT_PTR write_address, const S& value) {
+	write_memory(write_address, (UINT_PTR)&value, sizeof(S));
+}
+
+int main() {
+	printf("Running\n");
+
+	base_address = get_module_base_address("Explorer.exe");
+	if (!base_address)
+		printf("base address not found\n");
+	else
+		printf("Found base address\n");
+
+	Sleep(5000);
+	return 0;
 }

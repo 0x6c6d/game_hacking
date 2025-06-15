@@ -28,5 +28,47 @@ bool nullhook::call_kernel_function(void* kernel_function_address) {
 
 NTSTATUS nullhook::hook_handler(PVOID called_param) {
 
+	NULL_MEMORY* instructions = (NULL_MEMORY*)called_param;
+
+	if (instructions->req_base != FALSE){
+		ANSI_STRING AS;
+		UNICODE_STRING ModuleName;
+
+		RtlInitAnsiString(&AS, instructions->module_name);
+		RtlAnsiStringToUnicodeString(&ModuleName, &AS, TRUE);
+
+		PEPROCESS process;
+		PsLookupProcessByProcessId((HANDLE)instructions->pid, &process);
+		ULONG64 base_address64 = NULL;
+		base_address64 = get_module_base_x64(process, ModuleName);
+		instructions->base_address = base_address64;
+		RtlFreeUnicodeString(&ModuleName);
+	}
+
+	if (instructions->write != FALSE)
+	{
+		if (instructions->address < 0x7FFFFFFFFFFF && instructions->address > 0)
+		{
+			PVOID kernel_buff = ExAllocatePool(NonPagedPool, instructions->size);
+
+			if (!kernel_buff)
+				return STATUS_UNSUCCESSFUL;
+
+			if (!memcpy(kernel_buff, instructions->buffer_address, instructions->size))
+				return STATUS_UNSUCCESSFUL;
+
+			PEPROCESS process;
+			PsLookupProcessByProcessId((HANDLE)instructions->pid, &process);
+			write_kernel_memory((HANDLE)instructions->pid, instructions->address, kernel_buff, instructions->size);
+			ExFreePool(kernel_buff);
+		}
+	}
+
+	if (instructions->read != FALSE)
+	{
+		if (instructions->address < 0x7FFFFFFFFFFF && instructions->address > 0)
+			read_kernel_memory((HANDLE)instructions->pid, instructions->address, instructions->output, instructions->size);
+	}
+
 	return STATUS_SUCCESS;
 }
