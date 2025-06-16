@@ -18,6 +18,10 @@ typedef struct _COPY_MEMORY {
 	bool		peb;
 	bool		read;
 	bool		write;
+	bool		get_client;
+	bool		get_engine;
+	bool		get_engine_size;
+	bool		get_client_size;
 	const char* module_name;
 	const char* process_name;
 } COPY_MEMORY;
@@ -40,8 +44,7 @@ namespace driver
 	{
 		COPY_MEMORY m{};
 		m.get_pid = true;
-		m.process_name = process_name;
-		
+		m.process_name = process_name;	
 		call_hook(&m);
 		return m.pid;
 	}
@@ -52,8 +55,18 @@ namespace driver
 		m.base = true;
 		m.pid = pid;
 		m.module_name = mod_name;
-		
 		call_hook(&m);
+		return (uintptr_t)m.buffer;
+	}
+
+	static uintptr_t get_module_info(HANDLE pid, const char* mod_name)
+	{
+		COPY_MEMORY m{};
+		m.base = true;
+		m.pid = pid;
+		m.module_name = mod_name;
+		call_hook(&m);
+
 		return (uintptr_t)m.buffer;
 	}
 
@@ -62,9 +75,44 @@ namespace driver
 		COPY_MEMORY m{};
 		m.peb = true;
 		m.pid = pid;
-
 		call_hook(&m);
 		return (uintptr_t)m.buffer;
+	}
+
+	static uintptr_t get_client(HANDLE pid)
+	{
+		COPY_MEMORY m{};
+		m.get_client = true;
+		m.pid = pid;
+		call_hook(&m);
+		return (uintptr_t)m.buffer;
+	}
+
+	static uintptr_t get_engine(HANDLE pid)
+	{
+		COPY_MEMORY m{};
+		m.get_engine = true;
+		m.pid = pid;
+		call_hook(&m);
+		return (uintptr_t)m.buffer;
+	}
+
+	static ULONG get_engine_size(HANDLE pid)
+	{
+		COPY_MEMORY m{};
+		m.get_engine_size = true;
+		m.pid = pid;
+		call_hook(&m);
+		return (ULONG)m.size;
+	}
+
+	static ULONG get_client_size(HANDLE pid)
+	{
+		COPY_MEMORY m{};
+		m.get_client_size = true;
+		m.pid = pid;
+		call_hook(&m);
+		return (ULONG)m.size;
 	}
 
 	template<typename type>
@@ -77,8 +125,7 @@ namespace driver
 		m.pid = globals::process_id;
 		m.address = read_addr;
 		m.buffer = &buffer;
-		m.size = sizeof(type);
-		
+		m.size = sizeof(type);	
 		call_hook(&m);
 		return buffer;
 	}
@@ -92,7 +139,6 @@ namespace driver
 		m.address = write_addr;
 		m.buffer = &value;
 		m.size = sizeof(value);
-
 		call_hook(&m);
 	}
 }
