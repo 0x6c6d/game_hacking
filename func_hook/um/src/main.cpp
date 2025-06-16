@@ -22,6 +22,18 @@ int main()
 		Sleep(1000);
 	}
 	printf("[i] found peb address: %p\n", (void*)globals::peb_address);
+
+	while (!globals::client) {
+		globals::client = driver::get_client(globals::process_id);
+		Sleep(1000);
+	}
+	printf("[i] found client: %p\n", (void*)globals::client);
+
+	while (!globals::engine) {
+		globals::engine = driver::get_engine(globals::process_id);
+		Sleep(1000);
+	}
+	printf("[i] found engine: %p\n", (void*)globals::engine);
 		
 	std::cin.get();
 	return 0;
